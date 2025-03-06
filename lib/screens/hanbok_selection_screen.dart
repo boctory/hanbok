@@ -23,7 +23,13 @@ class _HanbokSelectionScreenState extends State<HanbokSelectionScreen> {
   @override
   void initState() {
     super.initState();
-    _hanbokModelsFuture = _apiService.getHanbokModels();
+    _hanbokModelsFuture = _apiService.getHanbokModels().then((models) {
+      print('Received models: ${models.length}');
+      models.forEach((model) {
+        print('Model: ${model.name}, URL: ${model.imageUrl}');
+      });
+      return models;
+    });
   }
 
   @override
@@ -86,7 +92,25 @@ class _HanbokSelectionScreenState extends State<HanbokSelectionScreen> {
               future: _hanbokModelsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(AppConstants.paddingMedium),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: 4,
+                    itemBuilder: (context, index) => Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  );
                 } else if (snapshot.hasError) {
                   return Center(
                     child: Text(
@@ -151,12 +175,29 @@ class _HanbokSelectionScreenState extends State<HanbokSelectionScreen> {
                                   placeholder: (context, url) => Container(
                                     color: Colors.grey[200],
                                     child: const Center(
-                                      child: CircularProgressIndicator(),
+                                      child: CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(AppConstants.primaryColor),
+                                      ),
                                     ),
                                   ),
                                   errorWidget: (context, url, error) => Container(
                                     color: Colors.grey[200],
-                                    child: const Icon(Icons.error),
+                                    padding: const EdgeInsets.all(8),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.error, color: AppConstants.errorColor),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '이미지 로드 실패',
+                                          style: TextStyle(
+                                            color: AppConstants.errorColor,
+                                            fontSize: 12,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),

@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hanbok_app/constants/app_constants.dart';
-import 'package:hanbok_app/screens/index_screen.dart';
+import 'screens/index_screen.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 
-Future<void> main() async {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Load environment variables
   await dotenv.load(fileName: '.env');
+  
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL'] ?? '',
+    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    debug: true,
+  );
   
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

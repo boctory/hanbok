@@ -9,6 +9,7 @@ import 'package:hanbok_app/utils/image_utils.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class IndexScreen extends StatefulWidget {
   const IndexScreen({Key? key}) : super(key: key);
@@ -31,11 +32,12 @@ class _IndexScreenState extends State<IndexScreen> {
   String _statusMessage = '';
   bool _showStatus = false;
   bool _isLoading = false;
+  late Future<List<HanbokModel>> _hanbokModelsFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadHanbokModels();
+    _hanbokModelsFuture = _apiService.getHanbokModels();
   }
 
   @override
@@ -151,11 +153,14 @@ class _IndexScreenState extends State<IndexScreen> {
     });
 
     try {
-      // Generate image using API - 사용자 얼굴 사진과 선택한 한복 스타일 합성
-      final generatedImage = await _apiService.generateImage(
+      // Generate image using API - task_id를 받아옴
+      final taskId = await _apiService.generateImage(
         kIsWeb ? _webImage : _selectedImage,
         _selectedHanbokModel!.id,
       );
+
+      // task_id로 생성된 이미지 결과를 폴링
+      final generatedImage = await _apiService.getGeneratedImage(taskId);
 
       // Save to local storage
       await _storageService.saveGeneratedImage(generatedImage);
@@ -667,26 +672,57 @@ class _IndexScreenState extends State<IndexScreen> {
   }
 
   Widget _buildHanbokStyleOptions() {
-    return Container(
+    return SizedBox(
       height: 200,
       width: 600,
-      child: GridView.count(
-        crossAxisCount: 4,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        children: [
-          _buildHanbokStyleOption('assets/images/sample/sample1.png', 'style1'),
-          _buildHanbokStyleOption('assets/images/sample/sample2.png', 'style2'),
-          _buildHanbokStyleOption('assets/images/sample/sample3.png', 'style3'),
-          _buildHanbokStyleOption('assets/images/sample/sample4.png', 'style4'),
-        ],
+      child: FutureBuilder<List<HanbokModel>>(
+        future: _hanbokModelsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return GridView.count(
+              crossAxisCount: 4,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              children: List.generate(4, (index) => 
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                  ),
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('한복 스타일을 불러오는데 실패했습니다.'),
+            );
+          }
+
+          final models = snapshot.data ?? [];
+          
+          return GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: models.length,
+            itemBuilder: (context, index) {
+              final model = models[index];
+              return _buildHanbokStyleOption(model.imageUrl, model.id);
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHanbokStyleOption(String imagePath, String styleId) {
-    final bool isSelected = _selectedHanbokModel?.id == styleId;
-    
+  Widget _buildHanbokStyleOption(String imageUrl, String styleId) {
     return GestureDetector(
       onTap: () {
         setState(() {
@@ -695,51 +731,36 @@ class _IndexScreenState extends State<IndexScreen> {
             id: styleId,
             name: 'Hanbok $styleId',
             description: 'Traditional Korean Hanbok style',
-            imageUrl: imagePath,
+            imageUrl: imageUrl,
           );
         });
       },
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppConstants.primaryColor : Colors.transparent,
-            width: 3,
-          ),
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(5),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                imagePath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.error),
-                  );
-                },
+          borderRadius: BorderRadius.circular(10),
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              color: Colors.grey[200],
+              child: const Center(
+                child: CircularProgressIndicator(),
               ),
-              if (isSelected)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: AppConstants.primaryColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                  ),
-                ),
-            ],
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: Colors.grey[200],
+              child: const Icon(Icons.error),
+            ),
           ),
         ),
       ),

@@ -13,19 +13,20 @@ class GeneratedImage {
 
   factory GeneratedImage.fromJson(Map<String, dynamic> json) {
     return GeneratedImage(
-      id: json['id'],
-      imageUrl: json['image_url'],
-      createdAt: DateTime.parse(json['created_at']),
-      hanbokModelId: json['hanbok_model_id'],
+      id: json['id'] as String,
+      imageUrl: json['imageUrl'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      hanbokModelId: json['hanbokModelId'] as String? ?? '',
     );
   }
 
+  // toJson 메서드 추가
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'image_url': imageUrl,
-      'created_at': createdAt.toIso8601String(),
-      'hanbok_model_id': hanbokModelId,
+      'imageUrl': imageUrl,
+      'createdAt': createdAt.toIso8601String(),
+      'hanbokModelId': hanbokModelId,
     };
   }
-} 
+}
