@@ -44,7 +44,8 @@
 
 5. 애플리케이션 실행
    ```
-   flutter run
+   // Web 
+   flutter run -d chrome --web-port=53712
    ```
 
 ## 프로젝트 구조
