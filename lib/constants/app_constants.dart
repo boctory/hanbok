@@ -4,15 +4,17 @@ class AppConstants {
   // App Name
   static const String appName = "한복 AI";
   
-  // Colors
-  static const Color primaryColor = Color(0xFF9E4784); // Traditional Korean purple
-  static const Color secondaryColor = Color(0xFFE7BCDE); // Light pink
-  static const Color accentColor = Color(0xFFD16BA5); // Accent pink
-  static const Color backgroundColor = Color(0xFFFFF5F5); // Light background
-  static const Color textColor = Color(0xFF333333); // Dark text
-  static const Color lightTextColor = Color(0xFF666666); // Light text
+  // Colors - 모던한 테마로 업데이트
+  static const Color primaryColor = Color(0xFF7D4E92); // Modern purple (한복 보라색)
+  static const Color secondaryColor = Color(0xFFE76F8B); // Soft pink (분홍색)
+  static const Color accentColor = Color(0xFF4A6FD4); // Blue accent (파란색 강조)
+  static const Color backgroundColor = Color(0xFFF8F6FA); // Light background
+  static const Color cardColor = Color(0xFFFFFFFF); // Card background
+  static const Color textColor = Color(0xFF2D2B35); // Dark text
+  static const Color lightTextColor = Color(0xFF8F8D96); // Light text
   static const Color errorColor = Color(0xFFE53935); // Error red
   static const Color successColor = Color(0xFF43A047); // Success green
+  static const Color shadowColor = Color(0x40000000); // Shadow color
   
   // Font Families
   static const String koreanFontFamily = "NotoSansKR";
@@ -21,44 +23,86 @@ class AppConstants {
   // Text Styles
   static TextStyle headingStyle = const TextStyle(
     fontFamily: traditionalFontFamily,
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: FontWeight.bold,
     color: textColor,
+    letterSpacing: -0.5,
   );
   
   static TextStyle subheadingStyle = const TextStyle(
     fontFamily: koreanFontFamily,
-    fontSize: 18,
-    fontWeight: FontWeight.w500,
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
     color: textColor,
+    letterSpacing: -0.3,
   );
   
   static TextStyle bodyStyle = const TextStyle(
     fontFamily: koreanFontFamily,
     fontSize: 16,
     color: textColor,
+    letterSpacing: -0.2,
   );
   
   static TextStyle captionStyle = const TextStyle(
     fontFamily: koreanFontFamily,
     fontSize: 14,
     color: lightTextColor,
+    letterSpacing: -0.1,
+  );
+  
+  static TextStyle buttonStyle = const TextStyle(
+    fontFamily: koreanFontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+    letterSpacing: -0.2,
   );
   
   // Padding
   static const double paddingSmall = 8.0;
   static const double paddingMedium = 16.0;
   static const double paddingLarge = 24.0;
+  static const double paddingXLarge = 32.0;
   
   // Border Radius
-  static const double borderRadiusSmall = 4.0;
-  static const double borderRadiusMedium = 8.0;
-  static const double borderRadiusLarge = 16.0;
+  static const double borderRadiusSmall = 8.0;
+  static const double borderRadiusMedium = 12.0;
+  static const double borderRadiusLarge = 20.0;
+  
+  // Elevation
+  static const double elevationSmall = 2.0;
+  static const double elevationMedium = 4.0;
+  static const double elevationLarge = 8.0;
   
   // Animation Durations
   static const Duration shortAnimationDuration = Duration(milliseconds: 200);
-  static const Duration mediumAnimationDuration = Duration(milliseconds: 400);
-  static const Duration longAnimationDuration = Duration(milliseconds: 800);
+  static const Duration mediumAnimationDuration = Duration(milliseconds: 350);
+  static const Duration longAnimationDuration = Duration(milliseconds: 500);
+  
+  // Card Decoration
+  static BoxDecoration cardDecoration = BoxDecoration(
+    color: cardColor,
+    borderRadius: BorderRadius.circular(borderRadiusMedium),
+    boxShadow: [
+      BoxShadow(
+        color: shadowColor.withOpacity(0.08),
+        blurRadius: 15,
+        offset: const Offset(0, 4),
+      ),
+    ],
+  );
+  
+  // Button Decoration
+  static ButtonStyle primaryButtonStyle = ElevatedButton.styleFrom(
+    backgroundColor: primaryColor,
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(borderRadiusMedium),
+    ),
+    elevation: elevationSmall,
+  );
   
   // API Endpoints
   static const String generateImageEndpoint = "/generate-image";
