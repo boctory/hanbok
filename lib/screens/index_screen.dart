@@ -37,6 +37,7 @@ class _IndexScreenState extends State<IndexScreen> {
   Map<String, dynamic>? _userData;
   late Future<List<HanbokModel>> _hanbokModelsFuture;
   PageController _pageController = PageController();
+  PageController _hanbokStyleController = PageController();
 
   @override
   void initState() {
@@ -49,6 +50,7 @@ class _IndexScreenState extends State<IndexScreen> {
   void dispose() {
     _scrollController.dispose();
     _pageController.dispose();
+    _hanbokStyleController.dispose();
     super.dispose();
   }
 
@@ -779,7 +781,7 @@ class _IndexScreenState extends State<IndexScreen> {
               SizedBox(
                 height: 250,
                 child: PageView.builder(
-                  controller: _pageController,
+                  controller: _hanbokStyleController,
                   itemCount: models.length,
                   onPageChanged: (index) {
                     setState(() {
@@ -868,7 +870,7 @@ class _IndexScreenState extends State<IndexScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios),
                     onPressed: () {
-                      _pageController.previousPage(
+                      _hanbokStyleController.previousPage(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
                       );
@@ -887,7 +889,7 @@ class _IndexScreenState extends State<IndexScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios),
                     onPressed: () {
-                      _pageController.nextPage(
+                      _hanbokStyleController.nextPage(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOut,
                       );
