@@ -4,7 +4,6 @@ import 'package:hanbok_app/models/hanbok_model.dart';
 import 'package:hanbok_app/models/generated_image.dart';
 import 'package:hanbok_app/utils/image_utils.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:share_plus/share_plus.dart';
 
 class ImageResultScreen extends StatefulWidget {
   final GeneratedImage generatedImage;

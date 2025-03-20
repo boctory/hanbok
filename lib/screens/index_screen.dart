@@ -6,13 +6,14 @@ import 'package:hanbok_app/models/generated_image.dart';
 import 'package:hanbok_app/services/api_service.dart';
 import 'package:hanbok_app/services/storage_service.dart';
 import 'package:hanbok_app/utils/image_utils.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class IndexScreen extends StatefulWidget {
-  const IndexScreen({Key? key}) : super(key: key);
+  const IndexScreen({super.key});
 
   @override
   _IndexScreenState createState() => _IndexScreenState();
@@ -32,18 +33,93 @@ class _IndexScreenState extends State<IndexScreen> {
   String _statusMessage = '';
   bool _showStatus = false;
   bool _isLoading = false;
+  bool _isLoggedIn = false;
+  Map<String, dynamic>? _userData;
   late Future<List<HanbokModel>> _hanbokModelsFuture;
+  PageController _pageController = PageController();
 
   @override
   void initState() {
     super.initState();
     _hanbokModelsFuture = _apiService.getHanbokModels();
+    _checkLoginStatus();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    if (kIsWeb) {
+      try {
+        final accessToken = await FacebookAuth.instance.accessToken;
+        setState(() {
+          _isLoggedIn = accessToken != null;
+        });
+        
+        if (_isLoggedIn) {
+          final userData = await FacebookAuth.instance.getUserData();
+          setState(() {
+            _userData = userData;
+          });
+        }
+      } catch (e) {
+        print('Facebook login check error: $e');
+      }
+    }
+  }
+
+  Future<void> _login() async {
+    if (kIsWeb) {
+      try {
+        final LoginResult result = await FacebookAuth.instance.login();
+        if (result.status == LoginStatus.success) {
+          final userData = await FacebookAuth.instance.getUserData();
+          setState(() {
+            _isLoggedIn = true;
+            _userData = userData;
+          });
+        }
+      } catch (e) {
+        print('Facebook login error: $e');
+        setState(() {
+          _showStatus = true;
+          _statusMessage = '로그인 중 오류가 발생했습니다.';
+        });
+      }
+    } else {
+      // 모바일에서는 다른 로그인 방식 사용 또는 메시지 표시
+      setState(() {
+        _showStatus = true;
+        _statusMessage = '모바일에서는 Facebook 로그인이 지원되지 않습니다.';
+      });
+      
+      // 3초 후 상태 메시지 숨기기
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _showStatus = false;
+          });
+        }
+      });
+    }
+  }
+
+  Future<void> _logout() async {
+    if (kIsWeb) {
+      try {
+        await FacebookAuth.instance.logOut();
+        setState(() {
+          _isLoggedIn = false;
+          _userData = null;
+        });
+      } catch (e) {
+        print('Facebook logout error: $e');
+      }
+    }
   }
 
   Future<void> _loadHanbokModels() async {
@@ -248,13 +324,35 @@ class _IndexScreenState extends State<IndexScreen> {
     }
   }
 
-  void _scrollToSection(int index) {
-    // Calculate the height of each section (approximate)
-    final sectionHeight = MediaQuery.of(context).size.height;
+  Future<void> _shareToInstagram() async {
+    if (_generatedImage == null) return;
     
-    // Scroll to the section
-    _scrollController.animateTo(
-      sectionHeight * index,
+    try {
+      await ImageUtils.shareToInstagram(_generatedImage!.imageUrl);
+    } catch (e) {
+      print('Error sharing to Instagram: $e');
+      setState(() {
+        _showStatus = true;
+        _statusMessage = 'Instagram 공유 중 오류가 발생했습니다.';
+      });
+    }
+  }
+
+  void _resetImageSelection() {
+    setState(() {
+      _selectedImage = null;
+      _webImage = null;
+      _generatedImage = null;
+    });
+    
+    // Scroll to Upload section
+    _scrollToSection(1);
+  }
+
+  void _scrollToSection(int index) {
+    // PageController를 사용하여 페이지 이동
+    _pageController.animateToPage(
+      index,
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeInOut,
     );
@@ -263,55 +361,135 @@ class _IndexScreenState extends State<IndexScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Main content
-          ListView(
-            controller: _scrollController,
-            children: [
-              // Home Section
-              _buildHomeSection(),
-              
-              // Upload and Select Section
-              _buildUploadSection(),
-              
-              // Output Section
-              _buildOutputSection(),
-            ],
-          ),
-          
-          // Status message
-          if (_showStatus)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              left: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.all(AppConstants.paddingMedium),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildAppBar(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                children: [
+                  _buildHomeSection(),
+                  _buildUploadSection(),
+                  _buildOutputSection(),
+                ],
+              ),
+            ),
+            // 상태 메시지
+            if (_showStatus)
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: _statusMessage.contains('실패') || _statusMessage.contains('오류')
-                      ? AppConstants.errorColor.withOpacity(0.9)
-                      : AppConstants.successColor.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                      ? Colors.red.withOpacity(0.9)
+                      : Colors.green.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: Text(
                   _statusMessage,
-                  style: TextStyle(
-                    fontFamily: AppConstants.koreanFontFamily,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // 로고 디자인
+          Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.pink.shade300,
+                  Colors.purple.shade300,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '한복 AI',
+                  style: TextStyle(
+                    fontFamily: AppConstants.koreanFontFamily,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // 로그인 버튼 (웹에서만 표시)
+          if (kIsWeb)
+            _isLoggedIn
+                ? Row(
+                    children: [
+                      if (_userData != null && _userData!['picture'] != null)
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundImage: NetworkImage(_userData!['picture']['data']['url']),
+                        ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _logout,
+                        child: const Text('로그아웃'),
+                      ),
+                    ],
+                  )
+                : TextButton.icon(
+                    onPressed: _login,
+                    icon: const Icon(Icons.facebook, color: Colors.blue),
+                    label: const Text('Facebook 로그인'),
+                  ),
         ],
       ),
     );
@@ -319,107 +497,13 @@ class _IndexScreenState extends State<IndexScreen> {
 
   Widget _buildHomeSection() {
     return Container(
-      height: MediaQuery.of(context).size.height,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
+      color: Colors.white,
       child: Column(
         children: [
-          // App bar
-          Container(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top,
-              left: 16,
-              right: 16,
-              bottom: 16,
-            ),
-            color: Colors.white,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.diamond_outlined,
-                      color: AppConstants.primaryColor,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '한복 AI',
-                      style: TextStyle(
-                        fontFamily: AppConstants.koreanFontFamily,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        // Login action
-                      },
-                      child: Text(
-                        'Login',
-                        style: TextStyle(
-                          fontFamily: AppConstants.koreanFontFamily,
-                          color: AppConstants.textColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: () {
-                        // Sign up action
-                      },
-                      child: Text(
-                        'Sign up',
-                        style: TextStyle(
-                          fontFamily: AppConstants.koreanFontFamily,
-                          color: AppConstants.textColor,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.language),
-                      onPressed: () {
-                        // Language selection
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          
           // 구분선 추가
           Container(
             height: 1,
             color: Colors.grey.withOpacity(0.2),
-          ),
-          
-          // Title
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black),
-                  ),
-                  child: Text(
-                    'Try on Hanbok',
-                    style: TextStyle(
-                      fontFamily: AppConstants.koreanFontFamily,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
           
           // Hero image
@@ -498,6 +582,7 @@ class _IndexScreenState extends State<IndexScreen> {
                         '시작하기',
                         style: TextStyle(
                           fontFamily: AppConstants.koreanFontFamily,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
@@ -514,10 +599,7 @@ class _IndexScreenState extends State<IndexScreen> {
 
   Widget _buildUploadSection() {
     return Container(
-      height: MediaQuery.of(context).size.height,
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-      ),
+      color: Colors.white,
       child: Column(
         children: [
           // 구분선 추가
@@ -528,142 +610,145 @@ class _IndexScreenState extends State<IndexScreen> {
           
           // Upload content
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      'Upload Your Photo',
-                      style: TextStyle(
-                        fontFamily: AppConstants.koreanFontFamily,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: AppConstants.textColor,
-                      ),
-                    ),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // 이미지 선택 버튼
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
                   ),
-                  Container(
-                    width: 300,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.blue[200]!,
-                        width: 1,
-                        style: BorderStyle.solid,
+                  child: Column(
+                    children: [
+                      Text(
+                        '나의 사진 선택',
+                        style: TextStyle(
+                          fontFamily: AppConstants.koreanFontFamily,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppConstants.textColor,
+                        ),
                       ),
-                    ),
-                    child: _hasSelectedImage()
-                        ? ClipRRect(
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () => _pickImage(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library),
+                            label: const Text('갤러리'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => _pickImage(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt),
+                            label: const Text('카메라'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      if (_hasSelectedImage()) ...[
+                        Container(
+                          height: 200,
+                          width: 200,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: _buildSelectedImage(),
-                          )
-                        : Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.cloud_upload,
-                                size: 48,
-                                color: Colors.blue[400],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Drag and drop your photo here or',
-                                style: TextStyle(
-                                  fontFamily: AppConstants.koreanFontFamily,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: () => _pickImage(ImageSource.gallery),
-                                icon: const Icon(Icons.file_upload),
-                                label: const Text('Choose File'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
-                              ),
-                            ],
                           ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 40),
-                  Text(
-                    'Select Hanbok Style',
+                ),
+                
+                const SizedBox(height: 32),
+                
+                // 한복 스타일 선택
+                Text(
+                  '한복 스타일 선택',
+                  style: TextStyle(
+                    fontFamily: AppConstants.koreanFontFamily,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppConstants.textColor,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildHanbokStyleOptions(),
+                const SizedBox(height: 40),
+                ElevatedButton.icon(
+                  onPressed: !_hasSelectedImage() || _selectedHanbokModel == null || _isGenerating
+                      ? null
+                      : _generateImage,
+                  icon: const Icon(Icons.auto_awesome),
+                  label: Text(
+                    'Generate',
                     style: TextStyle(
                       fontFamily: AppConstants.koreanFontFamily,
-                      fontSize: 24,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                if (_isGenerating) ...[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Processing your image...',
+                    style: TextStyle(
+                      fontFamily: AppConstants.koreanFontFamily,
                       color: AppConstants.textColor,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  _buildHanbokStyleOptions(),
-                  const SizedBox(height: 40),
-                  ElevatedButton.icon(
-                    onPressed: !_hasSelectedImage() || _selectedHanbokModel == null || _isGenerating
-                        ? null
-                        : _generateImage,
-                    icon: const Icon(Icons.auto_awesome),
-                    label: Text(
-                      'Generate',
-                      style: TextStyle(
-                        fontFamily: AppConstants.koreanFontFamily,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 32),
-                  if (_isGenerating) ...[
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Processing your image...',
-                      style: TextStyle(
-                        fontFamily: AppConstants.koreanFontFamily,
-                        color: AppConstants.textColor,
-                      ),
+                  // Progress bar
+                  Container(
+                    width: 300,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    const SizedBox(height: 32),
-                    // Progress bar
-                    Container(
-                      width: 300,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: FractionallySizedBox(
-                        widthFactor: 0.6, // 60% progress
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                    child: FractionallySizedBox(
+                      widthFactor: 0.6, // 60% progress
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ],
@@ -673,28 +758,12 @@ class _IndexScreenState extends State<IndexScreen> {
 
   Widget _buildHanbokStyleOptions() {
     return SizedBox(
-      height: 200,
-      width: 600,
+      height: 300,
       child: FutureBuilder<List<HanbokModel>>(
         future: _hanbokModelsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return GridView.count(
-              crossAxisCount: 4,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              children: List.generate(4, (index) => 
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                  ),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-              ),
-            );
+            return const Center(child: CircularProgressIndicator());
           }
 
           if (snapshot.hasError) {
@@ -705,64 +774,130 @@ class _IndexScreenState extends State<IndexScreen> {
 
           final models = snapshot.data ?? [];
           
-          return GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: models.length,
-            itemBuilder: (context, index) {
-              final model = models[index];
-              return _buildHanbokStyleOption(model.imageUrl, model.id);
-            },
+          return Column(
+            children: [
+              SizedBox(
+                height: 250,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: models.length,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _selectedHanbokModel = models[index];
+                    });
+                  },
+                  itemBuilder: (context, index) {
+                    final model = models[index];
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: CachedNetworkImage(
+                                imageUrl: model.imageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.error),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                color: Colors.black.withOpacity(0.5),
+                                child: Text(
+                                  model.name,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                            if (_selectedHanbokModel?.id == model.id)
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.blue,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_ios),
+                    onPressed: () {
+                      _pageController.previousPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        _selectedHanbokModel?.name ?? '한복 스타일을 선택하세요',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios),
+                    onPressed: () {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildHanbokStyleOption(String imageUrl, String styleId) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          // Create a temporary HanbokModel with the selected style
-          _selectedHanbokModel = HanbokModel(
-            id: styleId,
-            name: 'Hanbok $styleId',
-            description: 'Traditional Korean Hanbok style',
-            imageUrl: imageUrl,
-          );
-        });
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              color: Colors.grey[200],
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
-            errorWidget: (context, url, error) => Container(
-              color: Colors.grey[200],
-              child: const Icon(Icons.error),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -848,8 +983,20 @@ class _IndexScreenState extends State<IndexScreen> {
                                   tooltip: '공유하기',
                                   color: Colors.green,
                                 ),
+                                const SizedBox(width: 16),
+                                IconButton(
+                                  icon: const Icon(Icons.camera),
+                                  onPressed: _shareToInstagram,
+                                  tooltip: 'Instagram에 공유',
+                                  color: Colors.purple,
+                                ),
                               ],
                             ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _resetImageSelection,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('다른 사진으로 시도하기'),
                           ),
                         ],
                       ),

@@ -25,9 +25,9 @@ class _HanbokSelectionScreenState extends State<HanbokSelectionScreen> {
     super.initState();
     _hanbokModelsFuture = _apiService.getHanbokModels().then((models) {
       print('Received models: ${models.length}');
-      models.forEach((model) {
+      for (var model in models) {
         print('Model: ${model.name}, URL: ${model.imageUrl}');
-      });
+      }
       return models;
     });
   }

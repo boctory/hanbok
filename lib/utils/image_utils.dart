@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 
 class ImageUtils {
   static final ImagePicker _picker = ImagePicker();
@@ -86,26 +87,38 @@ class ImageUtils {
   // Save image to gallery
   static Future<bool> saveImageToGallery(String imageUrl) async {
     try {
-      // Request storage permission
-      final status = await Permission.storage.request();
-      if (!status.isGranted) {
-        return false;
+      if (kIsWeb) {
+        // 웹에서는 다운로드 링크를 열어 저장하도록 함
+        final Uri uri = Uri.parse(imageUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return true;
+        } else {
+          return false;
+        }
+      } else {
+        // 모바일에서는 갤러리에 저장
+        // Request storage permission
+        final status = await Permission.storage.request();
+        if (!status.isGranted) {
+          return false;
+        }
+        
+        // Download image
+        final response = await http.get(Uri.parse(imageUrl));
+        
+        // Get temporary directory
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/hanbok_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        
+        // Save to temporary file
+        final file = File(tempPath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        // Save to gallery
+        final result = await GallerySaver.saveImage(file.path);
+        return result ?? false;
       }
-      
-      // Download image
-      final response = await http.get(Uri.parse(imageUrl));
-      
-      // Get temporary directory
-      final tempDir = await getTemporaryDirectory();
-      final tempPath = '${tempDir.path}/hanbok_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      // Save to temporary file
-      final file = File(tempPath);
-      await file.writeAsBytes(response.bodyBytes);
-      
-      // Save to gallery
-      final result = await GallerySaver.saveImage(file.path);
-      return result ?? false;
     } catch (e) {
       print('Error saving image to gallery: $e');
       return false;
@@ -115,24 +128,74 @@ class ImageUtils {
   // Share image
   static Future<void> shareImage(String imageUrl) async {
     try {
-      // Download image
-      final response = await http.get(Uri.parse(imageUrl));
-      
-      // Get temporary directory
-      final tempDir = await getTemporaryDirectory();
-      final tempPath = '${tempDir.path}/hanbok_share_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      // Save to temporary file
-      final file = File(tempPath);
-      await file.writeAsBytes(response.bodyBytes);
-      
-      // Share file
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: '한복 AI로 만든 나의 한복 이미지를 확인해보세요!',
-      );
+      if (kIsWeb) {
+        // 웹에서는 URL을 공유
+        final Uri uri = Uri.parse(imageUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } else {
+        // 모바일에서는 이미지 파일을 공유
+        // Download image
+        final response = await http.get(Uri.parse(imageUrl));
+        
+        // Get temporary directory
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/hanbok_share_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        
+        // Save to temporary file
+        final file = File(tempPath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        // Share file
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: '한복 AI로 생성한 나의 한복 이미지입니다!',
+        );
+      }
     } catch (e) {
       print('Error sharing image: $e');
+      rethrow;
+    }
+  }
+  
+  // Share to Instagram
+  static Future<void> shareToInstagram(String imageUrl) async {
+    try {
+      if (kIsWeb) {
+        // 웹에서는 인스타그램 웹사이트로 이동
+        final Uri uri = Uri.parse('https://www.instagram.com/');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } else {
+        // 모바일에서는 인스타그램 앱으로 이동
+        // Download image
+        final response = await http.get(Uri.parse(imageUrl));
+        
+        // Get temporary directory
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/hanbok_instagram_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        
+        // Save to temporary file
+        final file = File(tempPath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        // Try to open Instagram with the image
+        final Uri instagramUri = Uri.parse('instagram://camera');
+        if (await canLaunchUrl(instagramUri)) {
+          await launchUrl(instagramUri);
+        } else {
+          // Instagram 앱이 설치되어 있지 않은 경우 웹사이트로 이동
+          final Uri webUri = Uri.parse('https://www.instagram.com/');
+          if (await canLaunchUrl(webUri)) {
+            await launchUrl(webUri, mode: LaunchMode.externalApplication);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error sharing to Instagram: $e');
+      rethrow;
     }
   }
 } 
