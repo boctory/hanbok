@@ -17,8 +17,8 @@ class AppConstants {
   static const Color shadowColor = Color(0x40000000); // Shadow color
   
   // Font Families
-  static const String koreanFontFamily = "NotoSansKR";
-  static const String traditionalFontFamily = "NanumMyeongjo";
+  static const String koreanFontFamily = ".SF UI Text";
+  static const String traditionalFontFamily = ".SF UI Display";
   
   // Text Styles
   static TextStyle headingStyle = const TextStyle(

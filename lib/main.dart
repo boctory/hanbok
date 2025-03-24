@@ -41,8 +41,9 @@ void main() async {
       anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
       debug: true,
     );
+    print('✅ Supabase initialized successfully');
   } catch (e) {
-    print('Supabase initialization error: $e');
+    print('❌ Supabase initialization error: $e');
     // Continue with the app even if Supabase fails
   }
   

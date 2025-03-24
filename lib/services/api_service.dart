@@ -19,7 +19,12 @@ class ApiService {
   
   ApiService._internal() {
     // Supabase.instance.client를 사용하여 이미 초기화된 클라이언트를 가져옵니다
-    supabase = Supabase.instance.client;
+    try {
+      supabase = Supabase.instance.client;
+    } catch (e) {
+      print('Supabase client initialization error: $e');
+      // 클라이언트 초기화 오류 처리
+    }
   }
   
   // Get available Hanbok models

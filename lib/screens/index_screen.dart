@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:hanbok_app/constants/app_constants.dart';
 import 'package:hanbok_app/models/hanbok_model.dart';
@@ -83,25 +84,29 @@ class _IndexScreenState extends State<IndexScreen> {
     if (kIsWeb) {
       try {
         print('Attempting Facebook login...');
+        // 로그인 전에 로그아웃을 먼저 시도하여 상태를 초기화
+        await FacebookAuth.instance.logOut();
+        
+        // 로그인 진행 - 이메일 및 공개 프로필 권한 요청
         final LoginResult result = await FacebookAuth.instance.login(
           permissions: ['email', 'public_profile'],
         );
         
-        print('Facebook login result status: ${result.status}');
+        print('Login status: ${result.status.toString()}');
         
         if (result.status == LoginStatus.success) {
-          print('Facebook login successful, accessing user data...');
+          // 사용자 데이터 가져오기
           final userData = await FacebookAuth.instance.getUserData();
-          print('User data retrieved: ${userData['name']}');
+          print('Successfully retrieved user data: ${userData['name']}');
           
           setState(() {
             _isLoggedIn = true;
             _userData = userData;
             _showStatus = true;
-            _statusMessage = '로그인 성공!';
+            _statusMessage = '로그인되었습니다.';
           });
           
-          // Hide status message after 3 seconds
+          // 3초 후에 상태 메시지 숨기기
           Future.delayed(const Duration(seconds: 3), () {
             if (mounted) {
               setState(() {
@@ -109,17 +114,16 @@ class _IndexScreenState extends State<IndexScreen> {
               });
             }
           });
-        } else if (result.status == LoginStatus.cancelled) {
-          print('Facebook login cancelled by user');
-          // User cancelled login, don't show error
-          return;
         } else {
           print('Facebook login failed with status: ${result.status}');
           setState(() {
+            _isLoggedIn = false;
+            _userData = null;
             _showStatus = true;
-            _statusMessage = '로그인에 실패했습니다. 다시 시도해주세요.';
+            _statusMessage = '로그인 실패: ${result.message ?? '알 수 없는 오류'}';
           });
-          // Hide status message after 3 seconds
+          
+          // 3초 후에 상태 메시지 숨기기
           Future.delayed(const Duration(seconds: 3), () {
             if (mounted) {
               setState(() {
@@ -130,12 +134,14 @@ class _IndexScreenState extends State<IndexScreen> {
         }
       } catch (e) {
         print('❌ Facebook login error: $e');
-        // On web platforms just silently fail the Facebook login but don't crash the app
         setState(() {
+          _isLoggedIn = false;
+          _userData = null;
           _showStatus = true;
-          _statusMessage = '로그인 중 오류가 발생했습니다.';
+          _statusMessage = '로그인 중 오류가 발생했습니다: ${e.toString().substring(0, min(50, e.toString().length))}';
         });
-        // Hide status message after 3 seconds
+        
+        // 3초 후에 상태 메시지 숨기기
         Future.delayed(const Duration(seconds: 3), () {
           if (mounted) {
             setState(() {
