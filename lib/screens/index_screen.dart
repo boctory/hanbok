@@ -57,19 +57,23 @@ class _IndexScreenState extends State<IndexScreen> {
   Future<void> _checkLoginStatus() async {
     if (kIsWeb) {
       try {
+        print('Checking Facebook login status...');
         final accessToken = await FacebookAuth.instance.accessToken;
+        print('Facebook access token: ${accessToken != null ? 'Found' : 'Not found'}');
+        
         setState(() {
           _isLoggedIn = accessToken != null;
         });
         
         if (_isLoggedIn) {
           final userData = await FacebookAuth.instance.getUserData();
+          print('Facebook user data retrieved successfully');
           setState(() {
             _userData = userData;
           });
         }
       } catch (e) {
-        print('Facebook login check error: $e');
+        print('❌ Facebook login check error: $e');
         // Silently fail but don't show error to user
       }
     }
@@ -78,17 +82,39 @@ class _IndexScreenState extends State<IndexScreen> {
   Future<void> _login() async {
     if (kIsWeb) {
       try {
-        final LoginResult result = await FacebookAuth.instance.login();
+        print('Attempting Facebook login...');
+        final LoginResult result = await FacebookAuth.instance.login(
+          permissions: ['email', 'public_profile'],
+        );
+        
+        print('Facebook login result status: ${result.status}');
+        
         if (result.status == LoginStatus.success) {
+          print('Facebook login successful, accessing user data...');
           final userData = await FacebookAuth.instance.getUserData();
+          print('User data retrieved: ${userData['name']}');
+          
           setState(() {
             _isLoggedIn = true;
             _userData = userData;
+            _showStatus = true;
+            _statusMessage = '로그인 성공!';
+          });
+          
+          // Hide status message after 3 seconds
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _showStatus = false;
+              });
+            }
           });
         } else if (result.status == LoginStatus.cancelled) {
+          print('Facebook login cancelled by user');
           // User cancelled login, don't show error
           return;
         } else {
+          print('Facebook login failed with status: ${result.status}');
           setState(() {
             _showStatus = true;
             _statusMessage = '로그인에 실패했습니다. 다시 시도해주세요.';
@@ -103,7 +129,7 @@ class _IndexScreenState extends State<IndexScreen> {
           });
         }
       } catch (e) {
-        print('Facebook login error: $e');
+        print('❌ Facebook login error: $e');
         // On web platforms just silently fail the Facebook login but don't crash the app
         setState(() {
           _showStatus = true;
@@ -139,13 +165,40 @@ class _IndexScreenState extends State<IndexScreen> {
   Future<void> _logout() async {
     if (kIsWeb) {
       try {
+        print('Attempting Facebook logout...');
         await FacebookAuth.instance.logOut();
+        print('Facebook logout successful');
+        
         setState(() {
           _isLoggedIn = false;
           _userData = null;
+          _showStatus = true;
+          _statusMessage = '로그아웃되었습니다.';
+        });
+        
+        // Hide status message after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _showStatus = false;
+            });
+          }
         });
       } catch (e) {
-        print('Facebook logout error: $e');
+        print('❌ Facebook logout error: $e');
+        setState(() {
+          _showStatus = true;
+          _statusMessage = '로그아웃 중 오류가 발생했습니다.';
+        });
+        
+        // Hide status message after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _showStatus = false;
+            });
+          }
+        });
       }
     }
   }

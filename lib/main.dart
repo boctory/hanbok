@@ -18,14 +18,18 @@ void main() async {
   // Initialize Facebook Auth for Web
   if (kIsWeb) {
     try {
+      final facebookAppId = dotenv.env['FACEBOOK_APP_ID'] ?? '1234567890';
+      print('Facebook App ID: $facebookAppId');
+      
       await FacebookAuth.instance.webAndDesktopInitialize(
-        appId: dotenv.env['FACEBOOK_APP_ID'] ?? '1234567890', // Use Facebook App ID from .env
+        appId: facebookAppId,
         cookie: true,
         xfbml: true,
-        version: "v14.0",
+        version: "v15.0",
       );
+      print('✅ Facebook Auth initialized successfully');
     } catch (e) {
-      print('Facebook Auth web initialization error: $e');
+      print('❌ Facebook Auth web initialization error: $e');
       // Continue with the app even if Facebook Auth fails
     }
   }
