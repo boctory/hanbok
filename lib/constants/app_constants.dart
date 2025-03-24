@@ -4,11 +4,11 @@ class AppConstants {
   // App Name
   static const String appName = "한복 AI";
   
-  // Colors - 모던한 테마로 업데이트
-  static const Color primaryColor = Color(0xFF7D4E92); // Modern purple (한복 보라색)
-  static const Color secondaryColor = Color(0xFFE76F8B); // Soft pink (분홍색)
-  static const Color accentColor = Color(0xFF4A6FD4); // Blue accent (파란색 강조)
-  static const Color backgroundColor = Color(0xFFF8F6FA); // Light background
+  // Colors - 하늘색 테마로 업데이트
+  static const Color primaryColor = Color(0xFF4A90E2); // Sky blue (하늘색)
+  static const Color secondaryColor = Color(0xFF5FCBEF); // Light blue (밝은 하늘색)
+  static const Color accentColor = Color(0xFF2D78C8); // Darker blue (진한 하늘색)
+  static const Color backgroundColor = Color(0xFFF6FAFF); // Very light blue background
   static const Color cardColor = Color(0xFFFFFFFF); // Card background
   static const Color textColor = Color(0xFF2D2B35); // Dark text
   static const Color lightTextColor = Color(0xFF8F8D96); // Light text
