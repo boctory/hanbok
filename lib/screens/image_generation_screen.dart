@@ -44,11 +44,14 @@ class _ImageGenerationScreenState extends State<ImageGenerationScreen> {
         _hasError = false;
       });
 
-      // Generate image using API
-      final generatedImage = await _apiService.generateImage(
+      // Generate image using API - task_id를 받아옴
+      final taskId = await _apiService.generateImage(
         widget.userImage,
         widget.hanbokModel.id,
       );
+
+      // task_id로 생성된 이미지 결과를 폴링
+      final generatedImage = await _apiService.getGeneratedImage(taskId);
 
       // Save to local storage
       await _storageService.saveGeneratedImage(generatedImage);

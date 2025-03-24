@@ -5,6 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hanbok_app/constants/app_constants.dart';
 import 'screens/index_screen.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,12 +15,32 @@ void main() async {
   // Load environment variables
   await dotenv.load(fileName: '.env');
   
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-    debug: true,
-  );
+  // Initialize Facebook Auth for Web
+  if (kIsWeb) {
+    try {
+      await FacebookAuth.instance.webAndDesktopInitialize(
+        appId: dotenv.env['FACEBOOK_APP_ID'] ?? '1234567890', // Use Facebook App ID from .env
+        cookie: true,
+        xfbml: true,
+        version: "v14.0",
+      );
+    } catch (e) {
+      print('Facebook Auth web initialization error: $e');
+      // Continue with the app even if Facebook Auth fails
+    }
+  }
+  
+  // Initialize Supabase with error handling
+  try {
+    await Supabase.initialize(
+      url: dotenv.env['SUPABASE_URL'] ?? '',
+      anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+      debug: true,
+    );
+  } catch (e) {
+    print('Supabase initialization error: $e');
+    // Continue with the app even if Supabase fails
+  }
   
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

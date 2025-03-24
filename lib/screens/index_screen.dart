@@ -36,8 +36,8 @@ class _IndexScreenState extends State<IndexScreen> {
   bool _isLoggedIn = false;
   Map<String, dynamic>? _userData;
   late Future<List<HanbokModel>> _hanbokModelsFuture;
-  PageController _pageController = PageController();
-  PageController _hanbokStyleController = PageController();
+  final PageController _pageController = PageController();
+  final PageController _hanbokStyleController = PageController();
 
   @override
   void initState() {
@@ -70,6 +70,7 @@ class _IndexScreenState extends State<IndexScreen> {
         }
       } catch (e) {
         print('Facebook login check error: $e');
+        // Silently fail but don't show error to user
       }
     }
   }
@@ -84,22 +85,47 @@ class _IndexScreenState extends State<IndexScreen> {
             _isLoggedIn = true;
             _userData = userData;
           });
+        } else if (result.status == LoginStatus.cancelled) {
+          // User cancelled login, don't show error
+          return;
+        } else {
+          setState(() {
+            _showStatus = true;
+            _statusMessage = '로그인에 실패했습니다. 다시 시도해주세요.';
+          });
+          // Hide status message after 3 seconds
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _showStatus = false;
+              });
+            }
+          });
         }
       } catch (e) {
         print('Facebook login error: $e');
+        // On web platforms just silently fail the Facebook login but don't crash the app
         setState(() {
           _showStatus = true;
           _statusMessage = '로그인 중 오류가 발생했습니다.';
         });
+        // Hide status message after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _showStatus = false;
+            });
+          }
+        });
       }
     } else {
-      // 모바일에서는 다른 로그인 방식 사용 또는 메시지 표시
+      // On mobile we'll just show a message that Facebook login is not supported
       setState(() {
         _showStatus = true;
         _statusMessage = '모바일에서는 Facebook 로그인이 지원되지 않습니다.';
       });
       
-      // 3초 후 상태 메시지 숨기기
+      // Hide status message after 3 seconds
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) {
           setState(() {

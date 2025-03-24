@@ -57,6 +57,9 @@ dependencies:
   responsive_framework: ^1.1.1
   supabase_flutter: ^2.0.0
   flutter_facebook_auth: ^6.0.4
+  flutter_facebook_auth_platform_interface: ^5.0.0
+  flutter_facebook_auth_web: ^5.0.0
+  # Note: We'll handle Facebook auth separately in the code
 
 dev_dependencies:
   flutter_test:
