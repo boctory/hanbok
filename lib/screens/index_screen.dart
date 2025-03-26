@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:hanbok_app/screens/image_processing_screen.dart';
 
 class IndexScreen extends StatefulWidget {
   const IndexScreen({Key? key}) : super(key: key);
@@ -271,8 +272,53 @@ class _IndexScreenState extends State<IndexScreen> {
             children: [
               // Home Section
               _buildHomeSection(),
+
+              // 새로운 기능 홍보 섹션
+              Container(
+                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '🔥 새로운 기능 - 개선된 이미지 처리 흐름',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Edge Function과 폴링을 활용한 개선된 이미지 처리 흐름을 사용해보세요.',
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ImageProcessingScreen(),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                        ),
+                        child: const Text('새로운 이미지 처리 화면으로 이동'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               
-              // Upload and Select Section
+              // Upload Section
               _buildUploadSection(),
               
               // Output Section
@@ -317,7 +363,7 @@ class _IndexScreenState extends State<IndexScreen> {
     );
   }
 
-  Widget _buildHomeSection() {
+  Widget _buildHeroSection() {
     return Container(
       height: MediaQuery.of(context).size.height,
       decoration: const BoxDecoration(
@@ -512,7 +558,7 @@ class _IndexScreenState extends State<IndexScreen> {
     );
   }
 
-  Widget _buildUploadSection() {
+  Widget _buildInputSection() {
     return Container(
       height: MediaQuery.of(context).size.height,
       decoration: BoxDecoration(
