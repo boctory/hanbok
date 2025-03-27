@@ -1,40 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:hanbok_app/constants/app_constants.dart';
-import 'screens/index_screen.dart';
 import 'package:responsive_framework/responsive_framework.dart';
+import 'package:mvp_2/screens/index_screen.dart';
+import 'package:mvp_2/screens/detail_screen.dart';
+import 'package:mvp_2/screens/history_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Load environment variables
-  await dotenv.load(fileName: '.env');
-  
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-    debug: true,
-  );
-  
-  // Set preferred orientations
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-  
-  // Set system UI overlay style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
-  
+void main() {
   runApp(const MyApp());
 }
 
@@ -44,56 +14,56 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: AppConstants.appName,
+      title: '한복 앱',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: AppConstants.primaryColor,
+        primaryColor: Colors.indigo[400],
         colorScheme: ColorScheme.fromSeed(
-          seedColor: AppConstants.primaryColor,
-          primary: AppConstants.primaryColor,
-          secondary: AppConstants.secondaryColor,
-          background: AppConstants.backgroundColor,
-          error: AppConstants.errorColor,
+          seedColor: Colors.indigo[400]!,
+          primary: Colors.indigo[400]!,
+          secondary: Colors.pink[300]!,
+          background: Colors.grey[50]!,
+          error: Colors.red[400]!,
         ),
-        scaffoldBackgroundColor: AppConstants.backgroundColor,
-        fontFamily: AppConstants.koreanFontFamily,
+        scaffoldBackgroundColor: Colors.grey[50]!,
+        fontFamily: 'NotoSansKR',
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.white,
-          foregroundColor: AppConstants.textColor,
+          foregroundColor: Colors.black87,
           elevation: 0,
           centerTitle: true,
           titleTextStyle: TextStyle(
-            fontFamily: AppConstants.koreanFontFamily,
-            color: AppConstants.textColor,
+            fontFamily: 'NotoSansKR',
+            color: Colors.black87,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
           iconTheme: IconThemeData(
-            color: AppConstants.primaryColor,
+            color: Colors.indigo[400],
           ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppConstants.primaryColor,
+            backgroundColor: Colors.indigo[400],
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+              borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 12,
             ),
             textStyle: TextStyle(
-              fontFamily: AppConstants.koreanFontFamily,
+              fontFamily: 'NotoSansKR',
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: AppConstants.primaryColor,
+            foregroundColor: Colors.indigo[400],
             textStyle: TextStyle(
-              fontFamily: AppConstants.koreanFontFamily,
+              fontFamily: 'NotoSansKR',
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -102,27 +72,27 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
               color: Colors.grey[300]!,
             ),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
               color: Colors.grey[300]!,
             ),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
-              color: AppConstants.primaryColor,
+              color: Colors.indigo[400]!,
             ),
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+            borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(
-              color: AppConstants.errorColor,
+              color: Colors.red[400]!,
             ),
           ),
           contentPadding: const EdgeInsets.symmetric(
@@ -130,7 +100,7 @@ class MyApp extends StatelessWidget {
             vertical: 16,
           ),
           hintStyle: TextStyle(
-            fontFamily: AppConstants.koreanFontFamily,
+            fontFamily: 'NotoSansKR',
             color: Colors.grey[400],
           ),
         ),
@@ -145,7 +115,20 @@ class MyApp extends StatelessWidget {
           const Breakpoint(start: 1921, end: double.infinity, name: '4K'),
         ],
       ),
-      home: const IndexScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const IndexScreen(),
+        '/history': (context) => const HistoryScreen(),
+      },
+      onGenerateRoute: (settings) {
+        if (settings.name == '/detail') {
+          final int modelId = settings.arguments as int;
+          return MaterialPageRoute(
+            builder: (context) => DetailScreen(modelId: modelId),
+          );
+        }
+        return null;
+      },
     );
   }
 }

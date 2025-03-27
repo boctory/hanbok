@@ -1,442 +1,395 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hanbok_app/models/hanbok_model.dart';
 import 'package:hanbok_app/models/generated_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:hanbok_app/utils/logger.dart';
 
+// 한복 카테고리 모델
+class HanbokCategory {
+  final String id;
+  final String name;
+  final String slug;
+  final String? description;
+  final bool isActive;
+
+  HanbokCategory({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.description,
+    this.isActive = true,
+  });
+
+  factory HanbokCategory.fromJson(Map<String, dynamic> json) {
+    return HanbokCategory(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      slug: json['slug'] ?? '',
+      description: json['description'],
+      isActive: json['is_active'] ?? true,
+    );
+  }
+}
+
+// API 서비스 클래스
 class ApiService {
   static final ApiService _instance = ApiService._internal();
-  late final SupabaseClient supabase;
   
-  // Singleton 패턴
   factory ApiService() {
     return _instance;
   }
   
-  ApiService._internal() {
-    // Supabase.instance.client를 사용하여 이미 초기화된 클라이언트를 가져옵니다
-    supabase = Supabase.instance.client;
-  }
+  final SupabaseClient _supabaseClient;
+  final String _functionsUrl;
+  bool _isDebugMode = true;  // 디버그 로깅 활성화
+  List<HanbokCategory> _categories = [];
   
-  // Get available Hanbok models
-  Future<List<HanbokModel>> getHanbokModels() async {
-    try {
-      // print('Sending request to get-presets');
-      final response = await supabase.functions.invoke(
-        'get-presets',
-        body: {'name': 'Functions'},
-      );
-
-      // print('Response status: ${response.status}');
-      // print('Response data: ${response.data}');
-      // print('Response data type: ${response.data.runtimeType}');
-
-      if (response.status == 200) {
-        final Map<String, dynamic> jsonData = response.data is String
-            ? jsonDecode(response.data)
-            : response.data as Map<String, dynamic>;
-
-        final List<dynamic> presetList = jsonData['presets'] as List<dynamic>;
-        final List<Map<String, dynamic>> presets =
-            presetList.map((item) => Map<String, dynamic>.from(item)).toList();
-
-        final models = presets.map((model) => HanbokModel.fromJson({
-              'id': model['id'],
-              'name': model['name'],
-              'imageUrl': model['image_url'],
-              'description': '${model['name'] ?? 'Unnamed'} 스타일의 한복입니다.',
-            })).toList();
-
-        // print('✅ Parsed Models Count: ${models.length}');
-        return models;
-      } else {
-        // print('❌ Server error: ${response.status}, Data: ${response.data}');
-        return _getFallbackHanbokModels();
-      }
-    } catch (e) {
-      // print('❌ Error fetching Hanbok models: $e');
-      // print('🔍 Error details: ${e.toString()}');
-      if (e.toString().contains('XMLHttpRequest error')) {
-        // print('CORS error detected');
-      }
-      return _getFallbackHanbokModels();
+  ApiService._internal() : 
+    _supabaseClient = Supabase.instance.client,
+    _functionsUrl = '${dotenv.env['SUPABASE_URL'] ?? 'https://awxineofxcvdpsxlvtxv.supabase.co'}/functions/v1';
+  
+  void _logDebug(String message) {
+    if (_isDebugMode) {
+      debugPrint('[HanbokAPI] $message');
     }
   }
   
-  // 폴백 데이터를 위한 별도 메서드
-  List<HanbokModel> _getFallbackHanbokModels() {
-    return [
-      HanbokModel(
-        id: 'style1',
-        name: '전통 한복 (여성)',
-        imageUrl: 'assets/images/sample/sample1.png',
-        description: '전통적인 여성용 한복 모델입니다.',
-      ),
-      HanbokModel(
-        id: 'style2',
-        name: '현대적 한복 (여성)',
-        imageUrl: 'assets/images/sample/sample2.png',
-        description: '현대적인 스타일의 여성용 한복 모델입니다.',
-      ),
-      HanbokModel(
-        id: 'style3',
-        name: '전통 한복 (남성)',
-        imageUrl: 'assets/images/sample/sample3.png',
-        description: '전통적인 남성용 한복 모델입니다.',
-      ),
-    ];
-  }
-  
-  // Generate AI image with user photo and selected Hanbok model
-  Future<Uint8List> _cropFace(dynamic userPhoto) async {
+  // 카테고리별 한복 모델 조회
+  Future<List<HanbokModel>> getHanbokModels({String? categorySlug}) async {
     try {
-      final imageBytes = kIsWeb ? userPhoto as Uint8List : await (userPhoto as File).readAsBytes();
-      // 얼굴 인식 없이 이미지 전체를 반환
-      return imageBytes;
-    } catch (e) {
-      // print('Error in _cropFace: $e');
-      rethrow;
-    }
-  }
-
-  Future<String> _uploadCroppedFace(Uint8List croppedFace) async {
-    try {
-      // print('Sending request to upload-swapImage');
-      final base64Face = base64Encode(croppedFace);
-      final userId = supabase.auth.currentUser?.id;
-      // print('Request details - base64Face length: ${base64Face.length}, userId: $userId');
-
-      final response = await supabase.functions.invoke(
-        'upload-swapImage',
-        body: {
-          'croppedFace': base64Face,
-          'userId': userId,
-        },
-      );
-
-      // print('Response status: ${response.status}');
-      // print('Response data: ${response.data}');
-      // print('Response data type: ${response.data.runtimeType}');
-
-      if (response.status == 200) {
-        final Map<String, dynamic> jsonData = response.data is String
-            ? jsonDecode(response.data)
-            : response.data as Map<String, dynamic>;
-        // print('Parsed data: ${jsonData}');
-        return jsonData['swapImageUrl'] as String;
-      } else {
-        // print('❌ Server error: ${response.status}, Data: ${response.data}');
-        throw Exception('Failed to upload cropped face: ${response.status}, Data: ${response.data}');
-      }
-    } catch (e) {
-      // print('❌ Error in _uploadCroppedFace: $e');
-      // print('🔍 Error details: ${e.toString()}');
-      if (e.toString().contains('XMLHttpRequest error')) {
-        // print('CORS error detected');
-      }
-      rethrow;
-    }
-  }
-
-  Future<String> generateImage(dynamic userPhoto, String hanbokModelId) async {
-    try {
-      // print('Generating image for hanbok model ID: $hanbokModelId');
-
-      final hanbokModels = await getHanbokModels();
-      // print('Available hanbok models: ${hanbokModels.map((m) => '${m.id}: ${m.name}').join(', ')}');
-
-      if (hanbokModels.isEmpty) {
-        throw Exception('No hanbok models available');
-      }
-
-      HanbokModel? selectedModel;
-      try {
-        selectedModel = hanbokModels.firstWhere(
-          (model) => model.id.trim() == hanbokModelId.trim(),
-          orElse: () => hanbokModels.first,
-        );
-      } catch (e) {
-        // print('Error finding model: $e');
-        selectedModel = hanbokModels.first;
-      }
-      // print('Selected Hanbok Model Name: ${selectedModel.name}');
-
-      final croppedFace = await _cropFace(userPhoto);
-      final swapImageUrl = await _uploadCroppedFace(croppedFace);
-      // print('Swap Image URL: $swapImageUrl');
-
-      final userId = supabase.auth.currentUser?.id;
-      // print('Sending request to face-swap with userId: $userId');
-      final response = await supabase.functions.invoke(
-        'face-swap',
-        body: {
-          'targetImageUrl': selectedModel.imageUrl,
-          'swapImageUrl': swapImageUrl,
-          'userId': userId,
-        },
-      );
-
-      // print('Response status: ${response.status}');
-      // print('Response data: ${response.data}');
-
-      if (response.status == 200) {
-        final jsonData = response.data is String ? jsonDecode(response.data) : response.data;
-        // print('Parsed data: $jsonData');
-        if (jsonData['task_id'] == null) {
-          throw Exception('task_id is missing in response data: $jsonData');
-        }
-        return jsonData['task_id'] as String;
-      } else {
-        throw Exception('Failed to generate image: Status ${response.status}, Data: ${response.data}');
-      }
-    } catch (e) {
-      // print('❌ Error generating image: $e');
-      // print('🔍 Error details: ${e.toString()}');
-      if (e.toString().contains('XMLHttpRequest error')) {
-        // print('CORS error detected');
-      }
-      rethrow;
-    }
-  }
-  
-  Future<GeneratedImage> getGeneratedImage(String taskId) async {
-    const maxAttempts = 30;
-    const delaySeconds = 3;
-    final apiKey = dotenv.env['PIAPI_API_KEY'] ?? '';
-    const piApiUrl = 'https://api.piapi.ai/api/v1/task';
-
-    if (apiKey.isEmpty) {
-      throw Exception('PIAPI_API_KEY is not set in .env');
-    }
-
-    for (int i = 0; i < maxAttempts; i++) {
-      try {
-        // print('Polling PIAPI for task_id: $taskId, attempt: ${i + 1}');
-
-        final response = await http.get(
-          Uri.parse('$piApiUrl/$taskId'),
-          headers: {
-            'x-api-key': apiKey,
-            'User-Agent': 'Flutter-App/1.0.0',
-            'Accept': '*/*',
-            'Cache-Control': 'no-cache',
-          },
-        );
-
-        // print('PIAPI Response status: ${response.statusCode}');
-        // print('PIAPI Response data: ${response.body}');
-
-        if (response.statusCode == 200) {
-          final jsonData = jsonDecode(response.body);
-          final status = jsonData['data']['status'];
-          final output = jsonData['data']['output'];
-
-          // output이 null이 아닌지 확인
-          if (output != null && status == 'completed') {
-            final swapImageUrl = jsonData['data']['input']['swap_image'] as String;
-            final targetImageUrl = jsonData['data']['input']['target_image'] as String;
-            final imageUrl = jsonData['data']['output']['image_url'] as String?;
-            final userId = jsonData['data']['input']['userId'] as String?;
-            final taskType = jsonData['data']['task_type'] as String? ?? 'face-swap';
-
-            if (imageUrl == null) {
-              throw Exception('image_url is missing in PIAPI output');
-            }
-
-            final saveResponse = await Supabase.instance.client.functions.invoke(
-              'face-swap/save-result',
-              body: {
-                'task_id': taskId,
-                'swap_image': swapImageUrl,
-                'target_image': targetImageUrl,
-                'image_url': imageUrl,
-                'userId': userId,
-                'task_type': taskType,
-              },
-            );
-
-            // print('Save result response status: ${saveResponse.status}');
-            // print('Save result response data: ${saveResponse.data}');
-
-            if (saveResponse.status == 200) {
-              final saveJsonData = saveResponse.data is String ? jsonDecode(saveResponse.data) : saveResponse.data;
-              // print('saveJsonData: $saveJsonData');
-              if (saveJsonData['image_url'] == null) {
-                throw Exception('image_url is missing in save result response');
-              }
-              return GeneratedImage.fromJson({
-                'id': taskId,
-                'imageUrl': saveJsonData['image_url'] as String,
-                'createdAt': DateTime.now().toIso8601String(),
-                'hanbokModelId': '',
-              });
-            } else {
-              throw Exception('Failed to save result: Status ${saveResponse.status}, Data: ${saveResponse.data}');
-            }
-          } else {
-            // print('Task still pending, status: $status, output: $output, retrying...');
-            await Future.delayed(Duration(seconds: delaySeconds));
-          }
-        } else {
-          throw Exception('Failed to fetch PIAPI status: Status ${response.statusCode}, Data: ${response.body}');
-        }
-      } catch (e) {
-        // print('❌ Error fetching generated image: $e');
-        if (i == maxAttempts - 1) {
-          return GeneratedImage(
-            id: 'mock-id-${DateTime.now().millisecondsSinceEpoch}',
-            imageUrl: 'https://picsum.photos/400/600',
-            createdAt: DateTime.now(),
-            hanbokModelId: '',
-          );
-        }
-        await Future.delayed(Duration(seconds: delaySeconds));
-      }
-    }
-
-    throw Exception('Timeout waiting for image generation');
-  }
-  
-  // Get user's gallery of generated images
-  Future<List<GeneratedImage>> getUserGallery() async {
-    try {
-      final response = await supabase.functions.invoke(
-        'get-user-gallery',
-        body: {},
-      );
+      _logDebug('🔍 Fetching Hanbok models ${categorySlug != null ? "for category: $categorySlug" : ""}');
       
-      if (response.status == 200) {
-        final List<dynamic> data = response.data['images'];
-        return data.map((image) => GeneratedImage.fromJson(image)).toList();
-      } else {
-        throw Exception('Failed to load user gallery');
-      }
-    } catch (e) {
-      // print('Error fetching user gallery: $e');
-      return [
-        GeneratedImage(
-          id: 'mock-id-1',
-          imageUrl: 'https://picsum.photos/400/600?random=1',
-          createdAt: DateTime.now().subtract(const Duration(days: 1)),
-          hanbokModelId: 'style1',
-        ),
-        GeneratedImage(
-          id: 'mock-id-2',
-          imageUrl: 'https://picsum.photos/400/600?random=2',
-          createdAt: DateTime.now().subtract(const Duration(days: 2)),
-          hanbokModelId: 'style2',
-        ),
-      ];
-    }
-  }
-
-  // 새로운 요구사항에 맞는 API 메서드 구현
-
-  // 1. 프리셋 이미지 가져오기 (get-preset Edge Function 호출)
-  Future<String> getPresetImage() async {
-    try {
-      final response = await supabase.functions.invoke(
-        'get-preset',
-        method: 'GET',
-      );
+      final url = '$_functionsUrl/get-preset${categorySlug != null ? '?category_slug=$categorySlug' : ''}';
+      _logDebug('🌐 Request URL: $url');
       
-      if (response.status == 200) {
-        final jsonData = response.data is String ? jsonDecode(response.data) : response.data;
-        final presetUrl = jsonData['presetUrl'] as String;
-        return presetUrl;
-      } else {
-        throw Exception('Failed to get preset image: ${response.status}');
-      }
-    } catch (e) {
-      // 오류 발생 시 샘플 이미지 URL 반환
-      return 'https://picsum.photos/400/600?random=1';
-    }
-  }
-
-  // 2. 소스 이미지 업로드 (upload-image Edge Function 호출)
-  Future<String> uploadSourceImage(dynamic imageSource) async {
-    try {
-      final Uint8List imageBytes = kIsWeb 
-          ? imageSource as Uint8List 
-          : await (imageSource as File).readAsBytes();
-      
-      final base64Image = base64Encode(imageBytes);
-      
-      final response = await supabase.functions.invoke(
-        'upload-image',
-        method: 'POST',
-        body: {
-          'image': base64Image,
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
         },
       );
       
-      if (response.status == 200) {
-        final jsonData = response.data is String ? jsonDecode(response.data) : response.data;
-        final imageUrl = jsonData['url'] as String;
-        return imageUrl;
+      _logDebug('✅ Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+        final List<dynamic> models = jsonData['data'];
+        
+        _logDebug('✅ Successfully parsed ${models.length} models');
+        return models.map((model) => HanbokModel.fromJson(model)).toList();
+      } else if (response.statusCode == 404) {
+        _logDebug('⚠️ No models found');
+        return [];
       } else {
-        throw Exception('Failed to upload image: ${response.status}');
+        _logDebug('❌ Server error: ${response.statusCode}, Body: ${response.body}');
+        throw Exception('Failed to load hanbok models');
       }
     } catch (e) {
-      // 에러 로깅
-      print('Error uploading image: $e');
-      rethrow;
+      _logDebug('❌ Exception in getHanbokModels: $e');
+      throw Exception('Failed to load hanbok models: $e');
     }
   }
-
-  // 3. Generate 요청 (generate Edge Function 호출)
-  Future<String> requestGeneration(String sourceUrl, String presetUrl) async {
+  
+  // 모든 카테고리 조회
+  Future<List<HanbokCategory>> getCategories() async {
     try {
-      final response = await supabase.functions.invoke(
-        'generate',
-        method: 'POST',
-        body: {
-          'sourceUrl': sourceUrl,
-          'presetUrl': presetUrl,
+      _logDebug('🔍 Fetching categories');
+      
+      final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? 'https://awxineofxcvdpsxlvtxv.supabase.co';
+      final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? _supabaseClient.auth.currentSession?.accessToken ?? '';
+      
+      final url = Uri.parse('$supabaseUrl/rest/v1/hanbok_categories?select=*&is_active=eq.true&order=name');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': 'Bearer $supabaseKey',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
         },
       );
       
-      if (response.status == 200) {
-        final jsonData = response.data is String ? jsonDecode(response.data) : response.data;
-        final taskId = jsonData['taskId'] as String;
+      if (response.statusCode == 200) {
+        final List<dynamic> categories = jsonDecode(response.body);
+        _logDebug('✅ Retrieved ${categories.length} categories');
+        
+        _categories = categories.map((category) => HanbokCategory.fromJson(category)).toList();
+        return _categories;
+      } else {
+        _logDebug('❌ Failed to load categories: ${response.statusCode} - ${response.body}');
+        throw Exception('Failed to load categories');
+      }
+    } catch (e) {
+      _logDebug('❌ Exception in getCategories: $e');
+      throw Exception('Failed to load categories: $e');
+    }
+  }
+  
+  // 이미지 업로드
+  Future<String> uploadImage(Uint8List imageBytes) async {
+    try {
+      _logDebug('📤 Uploading image');
+      
+      // 이미지를 Base64로 인코딩
+      final base64Image = 'data:image/png;base64,${base64Encode(imageBytes)}';
+      
+      // 현재 사용자 ID 가져오기
+      final userId = _supabaseClient.auth.currentUser?.id;
+      _logDebug('👤 User ID: ${userId ?? 'anonymous'}');
+      
+      // Edge Function에 이미지 업로드 요청
+      final url = '$_functionsUrl/upload-image';
+      _logDebug('🌐 Request URL: $url');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
+        },
+        body: jsonEncode({
+          'image_data': base64Image,
+          'user_id': userId,
+        }),
+      );
+      
+      _logDebug('✅ Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        _logDebug('📄 Uploaded image URL: ${jsonResponse['public_url']}');
+        return jsonResponse['public_url'];
+      } else {
+        _logDebug('❌ Error uploading image: ${response.body}');
+        throw Exception('Failed to upload image');
+      }
+    } catch (e) {
+      _logDebug('❌ Exception in uploadImage: $e');
+      throw Exception('Failed to upload image: $e');
+    }
+  }
+  
+  // 사용자의 생성된 이미지 조회
+  Future<List<GeneratedImage>> getUserGeneratedImages() async {
+    try {
+      _logDebug('🔍 Fetching user generated images');
+      
+      final userId = _supabaseClient.auth.currentUser?.id;
+      
+      if (userId == null) {
+        _logDebug('⚠️ No authenticated user');
+        return []; // 로그인하지 않은 경우 빈 목록 반환
+      }
+      
+      _logDebug('👤 User ID: $userId');
+      
+      final response = await _supabaseClient
+        .from('generated_images')
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+      
+      _logDebug('✅ Retrieved ${response.length} generated images');
+      
+      final List<dynamic> images = response;
+      return images.map((image) => GeneratedImage.fromJson(image)).toList();
+    } catch (e) {
+      _logDebug('❌ Exception in getUserGeneratedImages: $e');
+      throw Exception('Failed to load generated images: $e');
+    }
+  }
+  
+  // 사용자 이미지 업로드 (File 객체)
+  Future<String> uploadUserImage(dynamic image) async {
+    try {
+      _logDebug('📤 Uploading user image');
+      
+      if (image is File) {
+        // 파일을 바이트로 읽기
+        final bytes = await image.readAsBytes();
+        return uploadImage(bytes);
+      } else if (image is Uint8List) {
+        // 이미 바이트 형태인 경우 그대로 사용
+        return uploadImage(image);
+      } else {
+        throw Exception('Unsupported image type');
+      }
+    } catch (e) {
+      _logDebug('❌ Exception in uploadUserImage: $e');
+      throw Exception('Failed to upload user image: $e');
+    }
+  }
+  
+  // 이미지 생성 요청
+  Future<String> generateImage(dynamic image, String modelId) async {
+    try {
+      _logDebug('🎨 Generating image with model ID: $modelId');
+      
+      String imageUrl;
+      
+      // 이미지가 File, Uint8List 또는 String 형식인지 확인
+      if (image is File || image is Uint8List) {
+        imageUrl = await uploadUserImage(image);
+      } else if (image is String) {
+        // 이미 URL인 경우 그대로 사용
+        imageUrl = image;
+      } else {
+        throw Exception('Unsupported image type');
+      }
+      
+      _logDebug('🖼️ Using image URL: $imageUrl');
+      
+      // Edge Function에 생성 요청
+      final url = '$_functionsUrl/generate';
+      _logDebug('🌐 Request URL: $url');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
+        },
+        body: jsonEncode({
+          'image_url': imageUrl,
+          'model_id': modelId,
+          'user_id': _supabaseClient.auth.currentUser?.id,
+        }),
+      );
+      
+      _logDebug('✅ Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        final taskId = jsonResponse['task_id'];
+        _logDebug('🆔 Task ID: $taskId');
         return taskId;
       } else {
-        throw Exception('Failed to request generation: ${response.status}');
+        _logDebug('❌ Error generating image: ${response.body}');
+        throw Exception('Failed to generate image');
       }
     } catch (e) {
-      // 에러 로깅
-      print('Error requesting generation: $e');
-      rethrow;
+      _logDebug('❌ Exception in generateImage: $e');
+      throw Exception('Failed to generate image: $e');
+    }
+  }
+  
+  // 생성된 이미지 결과 조회
+  Future<GeneratedImage> getGeneratedImage(String taskId) async {
+    try {
+      _logDebug('🔍 Checking result for task ID: $taskId');
+      
+      // Edge Function에 결과 조회 요청
+      final url = '$_functionsUrl/check-result';
+      _logDebug('🌐 Request URL: $url');
+      
+      bool isCompleted = false;
+      GeneratedImage? result;
+      int attempts = 0;
+      const maxAttempts = 30; // 최대 30회 시도 (5초 간격으로 약 2.5분)
+      
+      while (!isCompleted && attempts < maxAttempts) {
+        attempts++;
+        
+        final response = await http.post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
+          },
+          body: jsonEncode({
+            'task_id': taskId,
+          }),
+        );
+        
+        _logDebug('✅ Response status: ${response.statusCode}, Attempt: $attempts');
+        
+        if (response.statusCode == 200) {
+          final jsonResponse = jsonDecode(response.body);
+          
+          if (jsonResponse['status'] == 'completed') {
+            _logDebug('✅ Generation completed!');
+            isCompleted = true;
+            result = GeneratedImage.fromJson(jsonResponse['result']);
+          } else {
+            _logDebug('⏳ Generation in progress (${jsonResponse['status']})...');
+            await Future.delayed(const Duration(seconds: 5)); // 5초 대기 후 재시도
+          }
+        } else {
+          _logDebug('❌ Error checking result: ${response.body}');
+          await Future.delayed(const Duration(seconds: 5)); // 에러 시에도 대기 후 재시도
+        }
+      }
+      
+      if (result != null) {
+        return result;
+      } else {
+        throw Exception('Image generation timed out');
+      }
+    } catch (e) {
+      _logDebug('❌ Exception in getGeneratedImage: $e');
+      throw Exception('Failed to get generated image: $e');
+    }
+  }
+  
+  // Getter for categories
+  List<HanbokCategory> get categories => _categories;
+
+  // 인기순으로 한복 모델 가져오기
+  Future<List<HanbokModel>> getPopularHanbokModels({int limit = 10}) async {
+    try {
+      final url = Uri.parse('$_functionsUrl/get-popular-models?limit=$limit');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => HanbokModel.fromJson(json)).toList();
+      } else {
+        logger.e('인기 한복 모델 가져오기 실패: ${response.statusCode} - ${response.body}');
+        throw Exception('인기 한복 모델 데이터를 가져오는데 실패했습니다.');
+      }
+    } catch (e) {
+      logger.e('인기 한복 모델 가져오기 오류: $e');
+      throw Exception('인기 한복 모델 데이터 로드 중 오류가 발생했습니다.');
     }
   }
 
-  // 4. 결과 확인 (check-result Edge Function 호출)
-  Future<Map<String, dynamic>> checkGenerationResult(String taskId) async {
+  // 조회수 증가 메서드
+  Future<void> incrementViewCount(String hanbokId) async {
     try {
-      final response = await supabase.functions.invoke(
-        'check-result',
-        method: 'GET',
-        queryParams: {'taskId': taskId},
+      final url = Uri.parse('$_functionsUrl/increment-view-count');
+      
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${_supabaseClient.auth.currentSession?.accessToken}',
+        },
+        body: jsonEncode({
+          'hanbok_id': hanbokId,
+        }),
       );
       
-      if (response.status == 200) {
-        final jsonData = response.data is String ? jsonDecode(response.data) : response.data;
-        return {
-          'status': jsonData['status'] as String? ?? 'pending',
-          'resultUrl': jsonData['result_url'] as String?,
-        };
-      } else {
-        throw Exception('Failed to check generation result: ${response.status}');
+      if (response.statusCode != 204) {
+        logger.e('조회수 증가 실패: ${response.statusCode} - ${response.body}');
+        throw Exception('조회수 증가에 실패했습니다.');
       }
     } catch (e) {
-      // 에러 로깅
-      print('Error checking generation result: $e');
-      // 오류 발생 시 pending 상태 반환
-      return {'status': 'pending'};
+      logger.e('조회수 증가 오류: $e');
+      // 조회수 증가 실패는 사용자 경험에 큰 영향을 주지 않으므로 예외를 다시 던지지 않음
     }
   }
-}
+} 
