@@ -30,6 +30,6 @@ flutter:
   
   assets:
     - assets/images/
-    - assets/images/traditional/
-    - assets/images/modern/
+    # - assets/images/traditional/
+    # - assets/images/modern/
     - .env
