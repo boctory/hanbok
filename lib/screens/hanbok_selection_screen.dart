@@ -1,283 +1,176 @@
 import 'package:flutter/material.dart';
-import 'package:hanbok_app/constants/app_constants.dart';
-import 'package:hanbok_app/models/hanbok_model.dart';
-import 'package:hanbok_app/screens/image_generation_screen.dart';
-import 'package:hanbok_app/services/api_service.dart';
-import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart' as provider;
+import '../constants/app_constants.dart';
+import '../services/app_state.dart';
+import '../widgets/hanbok_grid.dart';
 
-class HanbokSelectionScreen extends StatefulWidget {
-  final File userImage;
-
-  const HanbokSelectionScreen({super.key, required this.userImage});
-
-  @override
-  _HanbokSelectionScreenState createState() => _HanbokSelectionScreenState();
-}
-
-class _HanbokSelectionScreenState extends State<HanbokSelectionScreen> {
-  final ApiService _apiService = ApiService();
-  late Future<List<HanbokModel>> _hanbokModelsFuture;
-  HanbokModel? _selectedModel;
-
-  @override
-  void initState() {
-    super.initState();
-    _hanbokModelsFuture = _apiService.getHanbokModels().then((models) {
-      print('Received models: ${models.length}');
-      for (var model in models) {
-        print('Model: ${model.name}, URL: ${model.imageUrl}');
-      }
-      return models;
-    });
-  }
+class HanbokSelectionScreen extends StatelessWidget {
+  const HanbokSelectionScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final appState = provider.Provider.of<AppState>(context);
+    final hanbokImages = appState.getHanboksByCategory(appState.selectedCategory);
+
     return Scaffold(
-      backgroundColor: AppConstants.backgroundColor,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(
-          '한복 모델 선택',
-          style: TextStyle(
-            fontFamily: AppConstants.koreanFontFamily,
-            color: AppConstants.textColor,
-          ),
-        ),
         backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: IconThemeData(color: AppConstants.primaryColor),
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // User image preview
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppConstants.primaryColor.withOpacity(0.2),
+              radius: 18,
+              child: Icon(
+                Icons.accessibility_new,
+                color: AppConstants.primaryColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Try On\nHanbok',
+              style: TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
+        actions: [
           Container(
-            height: 200,
-            margin: const EdgeInsets.all(AppConstants.paddingMedium),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-              child: Image.file(
-                widget.userImage,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          
-          // Instructions
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
-            child: Text(
-              '아래에서 원하는 한복 모델을 선택하세요',
-              style: AppConstants.subheadingStyle,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Hanbok models grid
-          Expanded(
-            child: FutureBuilder<List<HanbokModel>>(
-              future: _hanbokModelsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return GridView.builder(
-                    padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.75,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: 4,
-                    itemBuilder: (context, index) => Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                      ),
-                      child: const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  );
-                } else if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      '한복 모델을 불러오는 중 오류가 발생했습니다.',
-                      style: AppConstants.bodyStyle,
-                    ),
-                  );
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(
-                    child: Text(
-                      '사용 가능한 한복 모델이 없습니다.',
-                      style: AppConstants.bodyStyle,
-                    ),
-                  );
-                }
-                
-                final models = snapshot.data!;
-                
-                return GridView.builder(
-                  padding: const EdgeInsets.all(AppConstants.paddingMedium),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.75,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                  ),
-                  itemCount: models.length,
-                  itemBuilder: (context, index) {
-                    final model = models[index];
-                    final isSelected = _selectedModel?.id == model.id;
-                    
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedModel = model;
-                        });
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                          border: Border.all(
-                            color: isSelected ? AppConstants.primaryColor : Colors.transparent,
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium - (isSelected ? 1 : 0)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: CachedNetworkImage(
-                                  imageUrl: model.imageUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: (context, url) => Container(
-                                    color: Colors.grey[200],
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        valueColor: AlwaysStoppedAnimation<Color>(AppConstants.primaryColor),
-                                      ),
-                                    ),
-                                  ),
-                                  errorWidget: (context, url, error) => Container(
-                                    color: Colors.grey[200],
-                                    padding: const EdgeInsets.all(8),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.error, color: AppConstants.errorColor),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '이미지 로드 실패',
-                                          style: TextStyle(
-                                            color: AppConstants.errorColor,
-                                            fontSize: 12,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(AppConstants.paddingSmall),
-                                color: Colors.white,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      model.name,
-                                      style: TextStyle(
-                                        fontFamily: AppConstants.koreanFontFamily,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      model.description,
-                                      style: TextStyle(
-                                        fontFamily: AppConstants.koreanFontFamily,
-                                        fontSize: 12,
-                                        color: AppConstants.lightTextColor,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          
-          // Generate button
-          Padding(
-            padding: const EdgeInsets.all(AppConstants.paddingMedium),
-            child: ElevatedButton(
-              onPressed: _selectedModel == null
-                  ? null
-                  : () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ImageGenerationScreen(
-                            userImage: widget.userImage,
-                            hanbokModel: _selectedModel!,
-                          ),
-                        ),
-                      );
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppConstants.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
-                ),
-                disabledBackgroundColor: Colors.grey[300],
-              ),
-              child: Text(
-                '이미지 생성하기',
-                style: TextStyle(
-                  fontFamily: AppConstants.koreanFontFamily,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            margin: const EdgeInsets.only(right: 16),
+            child: CircleAvatar(
+              backgroundColor: Colors.grey[200],
+              radius: 16,
+              child: const Text('EN', style: TextStyle(fontSize: 12, color: Colors.black87)),
             ),
           ),
         ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppConstants.defaultPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Step 2: Choose your hanbok',
+                style: AppConstants.headingStyle,
+              ),
+              const SizedBox(height: AppConstants.defaultPadding),
+              
+              // Category selection
+              Row(
+                children: [
+                  _buildCategoryButton(
+                    context: context,
+                    category: 'traditional',
+                    label: 'Traditional',
+                    isSelected: appState.selectedCategory == 'traditional',
+                  ),
+                  const SizedBox(width: AppConstants.defaultPadding),
+                  _buildCategoryButton(
+                    context: context,
+                    category: 'modern',
+                    label: 'Modern',
+                    isSelected: appState.selectedCategory == 'modern',
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppConstants.defaultPadding),
+              
+              // Hanbok grid
+              Expanded(
+                child: appState.isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(AppConstants.primaryColor),
+                        ),
+                      )
+                    : hanbokImages.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No hanbok images available for this category',
+                              style: AppConstants.bodyStyle,
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        : HanbokGrid(
+                            hanbokImages: hanbokImages,
+                            onHanbokSelected: (hanbok) {
+                              appState.selectHanbok(hanbok);
+                              Navigator.pushNamed(context, '/result');
+                            },
+                          ),
+              ),
+              
+              const SizedBox(height: AppConstants.defaultPadding),
+              
+              // Back button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppConstants.primaryColor,
+                    elevation: 0,
+                    side: BorderSide(color: AppConstants.primaryColor),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+                    ),
+                  ),
+                  child: const Text(
+                    'Back',
+                    style: TextStyle(
+                      fontSize: 16.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryButton({
+    required BuildContext context,
+    required String category,
+    required String label,
+    required bool isSelected,
+  }) {
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: () {
+          provider.Provider.of<AppState>(context, listen: false).setCategory(category);
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isSelected ? AppConstants.primaryColor : Colors.white,
+          foregroundColor: isSelected ? Colors.white : AppConstants.primaryColor,
+          elevation: 0,
+          side: BorderSide(
+            color: isSelected ? Colors.transparent : AppConstants.primaryColor,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.borderRadius),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16.0,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
